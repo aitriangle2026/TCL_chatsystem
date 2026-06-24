@@ -1,0 +1,55 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  font-family: 'Inter', sans-serif;
+}
+
+body {
+  background-color: #0d0f14;
+  background-image:
+    radial-gradient(ellipse 80% 60% at 10% 20%, rgba(139,92,246,0.12) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 90% 80%, rgba(99,102,241,0.1) 0%, transparent 60%),
+    radial-gradient(circle, rgba(139,92,246,0.15) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 28px 28px;
+  animation: bgShift 18s ease-in-out infinite alternate;
+}
+
+@keyframes bgShift {
+  0%   { background-position: 0% 0%,   100% 100%, 0 0; }
+  100% { background-position: 8% 5%,   92%  95%,  0 0; }
+}
+
+#root::before, #root::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: 0;
+  animation: orbFloat 22s ease-in-out infinite;
+}
+
+#root::before {
+  width: 520px; height: 520px;
+  top: -160px; left: -160px;
+  background: radial-gradient(circle, rgba(139,92,246,0.18) 0%, transparent 70%);
+}
+
+#root::after {
+  width: 480px; height: 480px;
+  bottom: -140px; right: -140px;
+  background: radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%);
+  animation-duration: 26s;
+  animation-direction: reverse;
+}
+
+@keyframes orbFloat {
+  0%   { transform: translate(0px,  0px)  scale(1);    }
+  25%  { transform: translate(30px, 20px) scale(1.05); }
+  50%  { transform: translate(15px, 40px) scale(0.97); }
+  75%  { transform: translate(-20px,15px) scale(1.03); }
+  100% { transform: translate(0px,  0px)  scale(1);    }
+}
