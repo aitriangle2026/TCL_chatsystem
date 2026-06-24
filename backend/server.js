@@ -22,7 +22,7 @@ if (!fs.existsSync(uploadsDir)) {
 }
 
 const allowedOrigins = [
-  "https://triangle-admin-chat.netlify.app/",
+  "https://triangle-admin-chat.netlify.app",
   "http://localhost:5173",
   "http://localhost:5174",
   "http://127.0.0.1:5173",
