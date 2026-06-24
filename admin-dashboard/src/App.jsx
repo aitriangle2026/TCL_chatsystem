@@ -325,6 +325,18 @@ function MessageBubble({ msg, onEdit, onDelete }) {
 
 // ── Main App ──────────────────────────────────────────────
 function App() {
+  const [isAuthenticated,     setIsAuthenticated]     = useState(Boolean(localStorage.getItem("adminToken")));
+  const [authView,             setAuthView]             = useState("login");
+  const [authName,             setAuthName]             = useState("");
+  const [authEmail,            setAuthEmail]            = useState("");
+  const [authPassword,         setAuthPassword]         = useState("");
+  const [authConfirm,          setAuthConfirm]          = useState("");
+  const [authError,            setAuthError]            = useState("");
+  const [authMessage,          setAuthMessage]          = useState("");
+  const [resetEmail,           setResetEmail]           = useState("");
+  const [resetToken,           setResetToken]           = useState("");
+  const [newPassword,          setNewPassword]          = useState("");
+  const [confirmPassword,      setConfirmPassword]      = useState("");
   const [conversations,       setConversations]       = useState([]);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [messages,            setMessages]            = useState([]);
@@ -341,8 +353,22 @@ function App() {
   const selectedConvRef = useRef(null);
 
   useEffect(() => { selectedConvRef.current = selectedConversation; }, [selectedConversation]);
-  useEffect(() => { socket.emit("admin_connected"); }, []);
-  useEffect(() => { loadConversations(); }, []);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
+    const email = params.get("email");
+    if (window.location.pathname.includes("/reset-password") && token && email) {
+      setResetToken(token);
+      setResetEmail(email);
+      setAuthView("reset");
+    }
+  }, []);
+  useEffect(() => {
+    if (isAuthenticated) {
+      socket.emit("admin_connected");
+      loadConversations();
+    }
+  }, [isAuthenticated]);
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   useEffect(() => {
@@ -397,6 +423,124 @@ function App() {
       socket.off("admin_conversation_deleted", handleConvDeleted);
     };
   }, []);
+
+  const handleAuthSuccess = (token, name, email) => {
+    localStorage.setItem("adminToken", token);
+    localStorage.setItem("adminName", name);
+    localStorage.setItem("adminEmail", email);
+    setIsAuthenticated(true);
+    setAuthError("");
+    setAuthMessage("");
+  };
+
+  const handleLogin = async () => {
+    if (!authEmail.trim() || !authPassword.trim()) {
+      setAuthError("Please fill in all fields");
+      return;
+    }
+
+    try {
+      const res = await axios.post(`${API_BASE_URL}/api/auth/login`, {
+        email: authEmail,
+        password: authPassword,
+        role: "admin",
+      });
+      handleAuthSuccess(res.data.token, res.data.name, res.data.email);
+    } catch (err) {
+      setAuthError(err.response?.data?.error || "Login failed");
+    }
+  };
+
+  const handleRegister = async () => {
+    if (!authName.trim() || !authEmail.trim() || !authPassword.trim()) {
+      setAuthError("Please fill in all fields");
+      return;
+    }
+    if (authPassword !== authConfirm) {
+      setAuthError("Passwords do not match");
+      return;
+    }
+    if (authPassword.length < 6) {
+      setAuthError("Password must be at least 6 characters");
+      return;
+    }
+
+    try {
+      const res = await axios.post(`${API_BASE_URL}/api/auth/register`, {
+        name: authName,
+        email: authEmail,
+        password: authPassword,
+        role: "admin",
+      });
+      handleAuthSuccess(res.data.token, res.data.name, res.data.email);
+    } catch (err) {
+      setAuthError(err.response?.data?.error || "Registration failed");
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!resetEmail.trim()) {
+      setAuthError("Please enter your email");
+      return;
+    }
+
+    try {
+      await axios.post(`${API_BASE_URL}/api/auth/forgot-password`, {
+        email: resetEmail,
+        role: "admin",
+      });
+      setAuthError("");
+      setAuthMessage("If an account exists, a reset link has been sent to your email.");
+    } catch (err) {
+      setAuthMessage("");
+      setAuthError(err.response?.data?.error || "Could not send reset link");
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!newPassword.trim() || newPassword.length < 6) {
+      setAuthError("Password must be at least 6 characters");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setAuthError("Passwords do not match");
+      return;
+    }
+
+    try {
+      await axios.post(`${API_BASE_URL}/api/auth/reset-password`, {
+        token: resetToken,
+        email: resetEmail,
+        password: newPassword,
+      });
+      setAuthError("");
+      setAuthMessage("Password updated successfully. You can sign in now.");
+      setAuthView("login");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      setAuthMessage("");
+      setAuthError(err.response?.data?.error || "Could not reset password");
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("adminToken");
+    localStorage.removeItem("adminName");
+    localStorage.removeItem("adminEmail");
+    setIsAuthenticated(false);
+    setAuthView("login");
+    setAuthName("");
+    setAuthEmail("");
+    setAuthPassword("");
+    setAuthConfirm("");
+    setAuthError("");
+    setAuthMessage("");
+    setResetEmail("");
+    setResetToken("");
+    setNewPassword("");
+    setConfirmPassword("");
+  };
 
   const loadConversations = async () => {
     try {
@@ -476,6 +620,52 @@ function App() {
     (c.customer_name || "").toLowerCase().includes(search.toLowerCase())
   );
 
+  if (!isAuthenticated) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#111318", color: "#e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter', sans-serif" }}>
+        <div style={{ width: "420px", background: "rgba(10,11,20,0.88)", border: "1px solid rgba(139,92,246,0.2)", borderRadius: "18px", padding: "28px", boxShadow: "0 20px 60px rgba(0,0,0,0.45)" }}>
+          <div style={{ fontSize: "20px", fontWeight: "700", marginBottom: "6px" }}>Admin Access</div>
+          <div style={{ fontSize: "13px", color: "#4b5563", marginBottom: "20px" }}>Sign in or create an admin account to manage chats.</div>
+          {authError && <div style={{ padding: "9px 12px", borderRadius: "8px", marginBottom: "12px", background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", color: "#f87171", fontSize: "12px" }}>{authError}</div>}
+          {authMessage && <div style={{ padding: "9px 12px", borderRadius: "8px", marginBottom: "12px", background: "rgba(74,222,128,0.08)", border: "1px solid rgba(74,222,128,0.2)", color: "#4ade80", fontSize: "12px" }}>{authMessage}</div>}
+          {authView === "login" ? (
+            <>
+              <input style={{ width: "100%", padding: "10px 12px", marginBottom: "12px", background: "#16181f", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "8px", color: "#e2e8f0" }} type="email" placeholder="Admin email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} />
+              <input style={{ width: "100%", padding: "10px 12px", marginBottom: "14px", background: "#16181f", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "8px", color: "#e2e8f0" }} type="password" placeholder="Password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} />
+              <button onClick={handleLogin} style={{ width: "100%", padding: "12px", background: "linear-gradient(135deg, #8B5CF6 0%, #6366f1 100%)", border: "none", borderRadius: "10px", color: "white", fontSize: "13px", fontWeight: "600", cursor: "pointer", marginBottom: "12px" }}>Sign in</button>
+              <div style={{ textAlign: "center", fontSize: "12px", color: "#4b5563" }}>
+                <span onClick={() => { setAuthView("forgot"); setAuthError(""); setAuthMessage(""); }} style={{ color: "#8B5CF6", cursor: "pointer", fontWeight: "600", display: "block", marginBottom: "8px" }}>Forgot password?</span>
+                <span>Need an account? <span onClick={() => setAuthView("register")} style={{ color: "#8B5CF6", cursor: "pointer", fontWeight: "600" }}>Create one</span></span>
+              </div>
+            </>
+          ) : authView === "register" ? (
+            <>
+              <input style={{ width: "100%", padding: "10px 12px", marginBottom: "12px", background: "#16181f", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "8px", color: "#e2e8f0" }} placeholder="Admin name" value={authName} onChange={(e) => setAuthName(e.target.value)} />
+              <input style={{ width: "100%", padding: "10px 12px", marginBottom: "12px", background: "#16181f", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "8px", color: "#e2e8f0" }} type="email" placeholder="Admin email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} />
+              <input style={{ width: "100%", padding: "10px 12px", marginBottom: "12px", background: "#16181f", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "8px", color: "#e2e8f0" }} type="password" placeholder="Password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} />
+              <input style={{ width: "100%", padding: "10px 12px", marginBottom: "14px", background: "#16181f", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "8px", color: "#e2e8f0" }} type="password" placeholder="Confirm password" value={authConfirm} onChange={(e) => setAuthConfirm(e.target.value)} />
+              <button onClick={handleRegister} style={{ width: "100%", padding: "12px", background: "linear-gradient(135deg, #8B5CF6 0%, #6366f1 100%)", border: "none", borderRadius: "10px", color: "white", fontSize: "13px", fontWeight: "600", cursor: "pointer", marginBottom: "12px" }}>Create admin account</button>
+              <div style={{ textAlign: "center", fontSize: "12px", color: "#4b5563" }}><span onClick={() => setAuthView("login")} style={{ color: "#8B5CF6", cursor: "pointer", fontWeight: "600" }}>Back to sign in</span></div>
+            </>
+          ) : authView === "forgot" ? (
+            <>
+              <input style={{ width: "100%", padding: "10px 12px", marginBottom: "14px", background: "#16181f", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "8px", color: "#e2e8f0" }} type="email" placeholder="Admin email" value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} />
+              <button onClick={handleForgotPassword} style={{ width: "100%", padding: "12px", background: "linear-gradient(135deg, #8B5CF6 0%, #6366f1 100%)", border: "none", borderRadius: "10px", color: "white", fontSize: "13px", fontWeight: "600", cursor: "pointer", marginBottom: "12px" }}>Send reset link</button>
+              <div style={{ textAlign: "center", fontSize: "12px", color: "#4b5563" }}><span onClick={() => setAuthView("login")} style={{ color: "#8B5CF6", cursor: "pointer", fontWeight: "600" }}>Back to sign in</span></div>
+            </>
+          ) : (
+            <>
+              <input style={{ width: "100%", padding: "10px 12px", marginBottom: "12px", background: "#16181f", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "8px", color: "#e2e8f0" }} type="password" placeholder="New password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+              <input style={{ width: "100%", padding: "10px 12px", marginBottom: "14px", background: "#16181f", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "8px", color: "#e2e8f0" }} type="password" placeholder="Confirm password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+              <button onClick={handleResetPassword} style={{ width: "100%", padding: "12px", background: "linear-gradient(135deg, #8B5CF6 0%, #6366f1 100%)", border: "none", borderRadius: "10px", color: "white", fontSize: "13px", fontWeight: "600", cursor: "pointer", marginBottom: "12px" }}>Update password</button>
+              <div style={{ textAlign: "center", fontSize: "12px", color: "#4b5563" }}><span onClick={() => setAuthView("login")} style={{ color: "#8B5CF6", cursor: "pointer", fontWeight: "600" }}>Back to sign in</span></div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={styles.app}>
       {editingMsg && (
@@ -520,6 +710,11 @@ function App() {
 
       {/* ── MAIN PANEL ── */}
       <div style={styles.main}>
+        <div style={{ padding: "12px 16px", display: "flex", justifyContent: "flex-end", borderBottom: "1px solid rgba(255,255,255,0.06)", background: "#16181f" }}>
+          <button onClick={handleLogout} style={{ background: "rgba(224,43,43,0.08)", color: "#f87171", border: "1px solid rgba(224,43,43,0.2)", padding: "8px 12px", borderRadius: "8px", cursor: "pointer", fontSize: "12px", fontWeight: "600" }}>
+            Logout
+          </button>
+        </div>
         {selectedConversation ? (
           <>
             {/* Header */}

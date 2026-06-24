@@ -288,6 +288,19 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+const inputStyle = {
+  width: "100%",
+  padding: "10px 12px",
+  background: "rgba(8,9,16,0.7)",
+  border: "1px solid rgba(139,92,246,0.15)",
+  borderRadius: "9px",
+  color: "#e2e8f0",
+  fontSize: "13px",
+  outline: "none",
+  fontFamily: "'Inter', sans-serif",
+  boxSizing: "border-box",
+};
+
 // ─────────────────────────────────────────────────────────
 // 6. APP
 // ─────────────────────────────────────────────────────────
@@ -303,6 +316,12 @@ function App() {
   const [isOnline,           setIsOnline]           = useState(false);
   const [uploading,          setUploading]          = useState(false);
   const [authView,           setAuthView]           = useState("login");
+  const [resetMessage,       setResetMessage]       = useState("");
+  const [resetError,         setResetError]         = useState("");
+  const [resetEmail,         setResetEmail]         = useState("");
+  const [resetToken,         setResetToken]         = useState("");
+  const [newPassword,        setNewPassword]        = useState("");
+  const [confirmPassword,    setConfirmPassword]    = useState("");
   const [isLoggedIn,         setIsLoggedIn]         = useState(false);
   const [editingMsg,         setEditingMsg]         = useState(null);
   const [unreadCount,        setUnreadCount]        = useState(0);
@@ -431,6 +450,17 @@ function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
+    const email = params.get("email");
+    if (window.location.pathname.includes("/reset-password") && token && email) {
+      setResetToken(token);
+      setResetEmail(email);
+      setAuthView("reset");
+    }
+  }, []);
+
   const createConversation = async () => {
     try {
       const res = await axios.post(`${API_BASE_URL}/api/conversations`, {
@@ -510,9 +540,61 @@ function App() {
     setNewMessage("");
     setSelectedFile(null);
     setAuthView("login");
+    setResetMessage("");
+    setResetError("");
     setIsOpen(true);
     setConversationEnded(false);
   }, []);
+
+  const handleForgotPassword = async () => {
+    if (!resetEmail.trim()) {
+      setResetError("Please enter your email");
+      return;
+    }
+
+    try {
+      await axios.post(`${API_BASE_URL}/api/auth/forgot-password`, {
+        email: resetEmail,
+        role: "client",
+      });
+      setResetError("");
+      setResetMessage("If an account exists, a reset link has been sent to your email.");
+    } catch (err) {
+      setResetMessage("");
+      if (err.response?.status === 409) {
+        setResetError("This email is already registered. Please sign in instead.");
+      } else {
+        setResetError(err.response?.data?.error || "Could not send reset link");
+      }
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!newPassword.trim() || newPassword.length < 6) {
+      setResetError("Password must be at least 6 characters");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setResetError("Passwords do not match");
+      return;
+    }
+
+    try {
+      await axios.post(`${API_BASE_URL}/api/auth/reset-password`, {
+        token: resetToken,
+        email: resetEmail,
+        password: newPassword,
+      });
+      setResetError("");
+      setResetMessage("Password updated successfully. You can sign in now.");
+      setAuthView("login");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      setResetMessage("");
+      setResetError(err.response?.data?.error || "Could not reset password");
+    }
+  };
 
   const handleClose = useCallback(() => setIsOpen(false), []);
 
@@ -537,7 +619,42 @@ function App() {
       <CardWrap>
         <Header chatStarted={false} isOnline={isOnline} onClose={handleClose} />
         {authView === "login" ? (
-          <Login onSuccess={handleAuthSuccess} onSwitchToRegister={() => setAuthView("register")} />
+          <Login
+            onSuccess={handleAuthSuccess}
+            onSwitchToRegister={() => setAuthView("register")}
+            onSwitchToForgot={() => setAuthView("forgot")}
+          />
+        ) : authView === "forgot" ? (
+          <div style={{ padding: "24px 22px" }}>
+            <div style={{ fontSize: "17px", fontWeight: "700", color: "#e2e8f0", marginBottom: "6px" }}>Reset password</div>
+            <div style={{ fontSize: "12px", color: "#4b5563", marginBottom: "20px" }}>Enter your email and we will send you a reset link.</div>
+            {resetError && <div style={{ padding: "9px 12px", borderRadius: "8px", marginBottom: "12px", background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", color: "#f87171", fontSize: "12px" }}>{resetError}</div>}
+            {resetMessage && <div style={{ padding: "9px 12px", borderRadius: "8px", marginBottom: "12px", background: "rgba(74,222,128,0.08)", border: "1px solid rgba(74,222,128,0.2)", color: "#4ade80", fontSize: "12px" }}>{resetMessage}</div>}
+            <input
+              style={{ ...inputStyle, marginBottom: "12px" }}
+              type="email"
+              placeholder="your@email.com"
+              value={resetEmail}
+              onChange={(e) => setResetEmail(e.target.value)}
+            />
+            <button onClick={handleForgotPassword} style={{ width: "100%", padding: "12px", background: "linear-gradient(135deg, #8B5CF6 0%, #6366f1 100%)", border: "none", borderRadius: "10px", color: "white", fontSize: "13px", fontWeight: "600", cursor: "pointer", marginBottom: "12px" }}>Send reset link</button>
+            <div style={{ textAlign: "center", fontSize: "12px", color: "#4b5563" }}>
+              <span onClick={() => setAuthView("login")} style={{ color: "#8B5CF6", cursor: "pointer", fontWeight: "600" }}>Back to sign in</span>
+            </div>
+          </div>
+        ) : authView === "reset" ? (
+          <div style={{ padding: "24px 22px" }}>
+            <div style={{ fontSize: "17px", fontWeight: "700", color: "#e2e8f0", marginBottom: "6px" }}>Set a new password</div>
+            <div style={{ fontSize: "12px", color: "#4b5563", marginBottom: "20px" }}>Choose a new password for {resetEmail || "your account"}.</div>
+            {resetError && <div style={{ padding: "9px 12px", borderRadius: "8px", marginBottom: "12px", background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", color: "#f87171", fontSize: "12px" }}>{resetError}</div>}
+            {resetMessage && <div style={{ padding: "9px 12px", borderRadius: "8px", marginBottom: "12px", background: "rgba(74,222,128,0.08)", border: "1px solid rgba(74,222,128,0.2)", color: "#4ade80", fontSize: "12px" }}>{resetMessage}</div>}
+            <input style={{ ...inputStyle, marginBottom: "12px" }} type="password" placeholder="New password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+            <input style={{ ...inputStyle, marginBottom: "16px" }} type="password" placeholder="Confirm password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+            <button onClick={handleResetPassword} style={{ width: "100%", padding: "12px", background: "linear-gradient(135deg, #8B5CF6 0%, #6366f1 100%)", border: "none", borderRadius: "10px", color: "white", fontSize: "13px", fontWeight: "600", cursor: "pointer", marginBottom: "12px" }}>Update password</button>
+            <div style={{ textAlign: "center", fontSize: "12px", color: "#4b5563" }}>
+              <span onClick={() => setAuthView("login")} style={{ color: "#8B5CF6", cursor: "pointer", fontWeight: "600" }}>Back to sign in</span>
+            </div>
+          </div>
         ) : (
           <Register onSuccess={handleAuthSuccess} onSwitchToLogin={() => setAuthView("login")} />
         )}

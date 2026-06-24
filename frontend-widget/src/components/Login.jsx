@@ -26,7 +26,7 @@ const labelStyle = {
   textTransform: "uppercase",
 };
 
-export default function Login({ onSuccess, onSwitchToRegister }) {
+export default function Login({ onSuccess, onSwitchToRegister, onSwitchToForgot }) {
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
   const [error,    setError]    = useState("");
@@ -130,8 +130,13 @@ export default function Login({ onSuccess, onSwitchToRegister }) {
         {loading ? "Signing in…" : "Sign In →"}
       </button>
 
-      {/* Switch to register */}
-      <div style={{ textAlign: "center", fontSize: "12px", color: "#4b5563" }}>
+      <div style={{ textAlign: "center", fontSize: "12px", color: "#4b5563", marginTop: "8px" }}>
+        <span
+          onClick={onSwitchToForgot}
+          style={{ color: "#8B5CF6", cursor: "pointer", fontWeight: "600", display: "block", marginBottom: "8px" }}
+        >
+          Forgot password?
+        </span>
         Don't have an account?{" "}
         <span
           onClick={onSwitchToRegister}
