@@ -485,12 +485,12 @@ function App() {
     }
 
     try {
-      await axios.post(`${API_BASE_URL}/api/auth/forgot-password`, {
+      const res = await axios.post(`${API_BASE_URL}/api/auth/forgot-password`, {
         email: resetEmail,
         role: "admin",
       });
       setAuthError("");
-      setAuthMessage("If an account exists, a reset link has been sent to your email.");
+      setAuthMessage(res.data?.resetLink ? `Reset link ready: ${res.data.resetLink}` : "If an account exists, a reset link has been sent to your email.");
     } catch (err) {
       setAuthMessage("");
       setAuthError(err.response?.data?.error || "Could not send reset link");

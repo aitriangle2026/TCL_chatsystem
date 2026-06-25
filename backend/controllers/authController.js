@@ -6,7 +6,30 @@ const nodemailer = require("nodemailer");
 
 const JWT_SECRET = process.env.JWT_SECRET || "tcl_secret_key";
 
+const normalizeEmail = (email) => (email || "").trim().toLowerCase();
 const getRole = (role) => (role === "admin" ? "admin" : "client");
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const findUserByEmail = async (users, email, role) => {
+  const normalizedEmail = normalizeEmail(email);
+  const roleFilter = role ? { role } : { role: { $in: ["client", "admin", null, undefined] } };
+  let user = await users.findOne({ email: normalizedEmail, ...roleFilter });
+
+  if (!user) {
+    user = await users.findOne({
+      email: { $regex: `^${escapeRegExp(normalizedEmail)}$`, $options: "i" },
+    });
+  }
+
+  if (user && user.email !== normalizedEmail) {
+    await users.updateOne(
+      { _id: user._id },
+      { $set: { email: normalizedEmail, updatedAt: new Date() } }
+    );
+  }
+
+  return user;
+};
 
 const getFrontendBase = (req, role = "client") => {
   const origin = req?.get("origin");
@@ -64,18 +87,19 @@ const register = async (req, res) => {
     return res.status(400).json({ error: "All fields required" });
 
   const normalizedRole = getRole(role);
+  const normalizedEmail = normalizeEmail(email);
 
   try {
     const db = getDB();
     const users = db.collection("users");
 
-    const existing = await users.findOne({ email, role: normalizedRole });
+    const existing = await users.findOne({ email: normalizedEmail, role: normalizedRole });
     if (existing) return res.status(409).json({ error: "Email already registered" });
 
     const hashed = await bcrypt.hash(password, 10);
     const result = await users.insertOne({
       name,
-      email,
+      email: normalizedEmail,
       password: hashed,
       role: normalizedRole,
       createdAt: new Date(),
@@ -83,12 +107,12 @@ const register = async (req, res) => {
     });
 
     const token = jwt.sign(
-      { id: result.insertedId, name, email, role: normalizedRole },
+      { id: result.insertedId, name, email: normalizedEmail, role: normalizedRole },
       JWT_SECRET,
       { expiresIn: "7d" }
     );
 
-    res.json({ token, name, email, role: normalizedRole });
+    res.json({ token, name, email: normalizedEmail, role: normalizedRole });
   } catch (err) {
     console.error("Register error:", err);
     res.status(500).json({ error: "Server error" });
@@ -101,24 +125,25 @@ const login = async (req, res) => {
     return res.status(400).json({ error: "Email and password required" });
 
   const normalizedRole = getRole(role);
+  const normalizedEmail = normalizeEmail(email);
 
   try {
     const db = getDB();
     const users = db.collection("users");
 
-    const user = await users.findOne({ email, role: normalizedRole });
+    const user = await findUserByEmail(users, normalizedEmail, normalizedRole);
     if (!user) return res.status(401).json({ error: "Invalid email or password" });
 
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.status(401).json({ error: "Invalid email or password" });
 
     const token = jwt.sign(
-      { id: user._id, name: user.name, email: user.email, role: normalizedRole },
+      { id: user._id, name: user.name, email: normalizeEmail(user.email), role: user.role || normalizedRole },
       JWT_SECRET,
       { expiresIn: "7d" }
     );
 
-    res.json({ token, name: user.name, email: user.email, role: normalizedRole });
+    res.json({ token, name: user.name, email: normalizeEmail(user.email), role: user.role || normalizedRole });
   } catch (err) {
     console.error("Login error:", err);
     res.status(500).json({ error: "Server error" });
@@ -130,11 +155,12 @@ const forgotPassword = async (req, res) => {
   if (!email) return res.status(400).json({ error: "Email is required" });
 
   const normalizedRole = getRole(role);
+  const normalizedEmail = normalizeEmail(email);
 
   try {
     const db = getDB();
     const users = db.collection("users");
-    const user = await users.findOne({ email, role: normalizedRole });
+    const user = await findUserByEmail(users, normalizedEmail, normalizedRole);
 
     if (!user) return res.status(404).json({ error: "No account found with that email" });
 
@@ -154,7 +180,7 @@ const forgotPassword = async (req, res) => {
     );
 
     const frontendBase = getFrontendBase(req, normalizedRole);
-    const resetLink = `${frontendBase}/reset-password?token=${rawToken}&email=${encodeURIComponent(email)}`;
+    const resetLink = `${frontendBase}/reset-password?token=${rawToken}&email=${encodeURIComponent(normalizedEmail)}`;
     await sendResetMail(user.email, resetLink);
 
     res.json({ message: "Password reset link sent to your email.", resetLink });
@@ -174,9 +200,10 @@ const resetPassword = async (req, res) => {
     const db = getDB();
     const users = db.collection("users");
     const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+    const normalizedEmail = normalizeEmail(email);
 
     const user = await users.findOne({
-      email,
+      email: normalizedEmail,
       resetPasswordToken: hashedToken,
       resetPasswordExpiresAt: { $gt: new Date() },
     });
