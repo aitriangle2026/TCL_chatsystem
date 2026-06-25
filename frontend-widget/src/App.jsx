@@ -558,7 +558,11 @@ function App() {
         role: "client",
       });
       setResetError("");
-      setResetMessage(res.data?.resetLink ? `Reset link ready: ${res.data.resetLink}` : "If an account exists, a reset link has been sent to your email.");
+      if (res.data?.emailSent === false && res.data?.resetLink) {
+        setResetMessage(`A reset link was generated, but email delivery is not configured on this server. Use this link instead: ${res.data.resetLink}`);
+      } else {
+        setResetMessage(res.data?.resetLink ? `Reset link ready: ${res.data.resetLink}` : "If an account exists, a reset link has been sent to your email.");
+      }
     } catch (err) {
       setResetMessage("");
       if (err.response?.status === 409) {

@@ -44,41 +44,63 @@ const getFrontendBase = (req, role = "client") => {
   return process.env.FRONTEND_URL || "https://user-chat-site.netlify.app";
 };
 
+const getSmtpConfig = () => {
+  const host = process.env.SMTP_HOST || process.env.MAIL_HOST || process.env.EMAIL_HOST;
+  const user = process.env.SMTP_USER || process.env.MAIL_USERNAME || process.env.MAIL_USER || process.env.EMAIL_USER || process.env.GMAIL_USER;
+  const pass = process.env.SMTP_PASS || process.env.MAIL_PASSWORD || process.env.MAIL_PASS || process.env.EMAIL_PASS || process.env.GMAIL_APP_PASSWORD;
+  const from = process.env.SMTP_FROM || process.env.MAIL_FROM || process.env.EMAIL_FROM || user;
+  const port = Number(process.env.SMTP_PORT || process.env.MAIL_PORT || process.env.EMAIL_PORT || 587);
+  const secureValue = process.env.SMTP_SECURE || process.env.MAIL_SECURE || process.env.EMAIL_SECURE;
+  const secure = secureValue === undefined ? port === 465 : secureValue === "true";
+  const service = process.env.SMTP_SERVICE || process.env.MAIL_SERVICE || process.env.EMAIL_SERVICE || (host && host.toLowerCase().includes("gmail") ? "gmail" : undefined);
+
+  return { host, user, pass, from, port, secure, service };
+};
+
 const createTransporter = () => {
-  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+  const smtpConfig = getSmtpConfig();
+  if (!smtpConfig.host || !smtpConfig.user || !smtpConfig.pass) {
     return null;
   }
 
   return nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: false,
+    host: smtpConfig.host,
+    port: smtpConfig.port,
+    secure: smtpConfig.secure,
     auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
+      user: smtpConfig.user,
+      pass: smtpConfig.pass,
     },
+    ...(smtpConfig.service ? { service: smtpConfig.service } : {}),
   });
 };
 
 const sendResetMail = async (recipient, resetLink) => {
   const transporter = createTransporter();
   if (!transporter) {
-    console.log("Password reset link:", resetLink);
-    return;
+    console.warn("SMTP is not configured. Password reset link generated but email was not sent.", resetLink);
+    return false;
   }
 
-  await transporter.sendMail({
-    from: process.env.SMTP_FROM || process.env.SMTP_USER,
-    to: recipient,
-    subject: "Reset your Triangle Lab password",
-    html: `
-      <div style="font-family: Arial, sans-serif; line-height: 1.6;">
-        <h2>Password reset request</h2>
-        <p>Use the link below to reset your password. It will expire in 1 hour.</p>
-        <p><a href="${resetLink}" target="_blank" rel="noreferrer">Reset password</a></p>
-      </div>
-    `,
-  });
+  try {
+    await transporter.sendMail({
+      from: getSmtpConfig().from || process.env.SMTP_USER || process.env.GMAIL_USER,
+      to: recipient,
+      subject: "Reset your Triangle Lab password",
+      html: `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+          <h2>Password reset request</h2>
+          <p>Use the link below to reset your password. It will expire in 1 hour.</p>
+          <p><a href="${resetLink}" target="_blank" rel="noreferrer">Reset password</a></p>
+        </div>
+      `,
+    });
+
+    return true;
+  } catch (err) {
+    console.error("Password reset email failed:", err);
+    throw err;
+  }
 };
 
 const register = async (req, res) => {
@@ -181,9 +203,13 @@ const forgotPassword = async (req, res) => {
 
     const frontendBase = getFrontendBase(req, normalizedRole);
     const resetLink = `${frontendBase}/reset-password?token=${rawToken}&email=${encodeURIComponent(normalizedEmail)}`;
-    await sendResetMail(user.email, resetLink);
+    const emailSent = await sendResetMail(user.email, resetLink);
 
-    res.json({ message: "Password reset link sent to your email.", resetLink });
+    res.json({
+      message: emailSent ? "Password reset link sent to your email." : "Password reset link generated, but email delivery is not configured on this server.",
+      resetLink,
+      emailSent,
+    });
   } catch (err) {
     console.error("Forgot password error:", err);
     res.status(500).json({ error: "Server error" });
@@ -230,4 +256,4 @@ const resetPassword = async (req, res) => {
   }
 };
 
-module.exports = { register, login, forgotPassword, resetPassword };
+module.exports = { register, login, forgotPassword, resetPassword, createTransporter, getSmtpConfig };
