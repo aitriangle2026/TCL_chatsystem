@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import axios from "axios";
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "https://triangle-lab-chat-production.up.railway.app/").replace(/\/$/, "");
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "");
 
 const inputStyle = {
   width: "100%",
@@ -35,36 +35,51 @@ export default function Register({ onSuccess, onSwitchToLogin }) {
   const [loading,  setLoading]  = useState(false);
 
   const handleRegister = async () => {
-    if (!name.trim() || !email.trim() || !password.trim()) {
-      setError("Please fill in all fields");
-      return;
-    }
-    if (password !== confirm) {
-      setError("Passwords do not match");
-      return;
-    }
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters");
-      return;
-    }
-    try {
-      setLoading(true);
-      setError("");
-      const res = await axios.post(`${API_BASE_URL}/api/auth/register`, {
+  if (!name.trim() || !email.trim() || !password.trim()) {
+    setError("Please fill in all fields");
+    return;
+  }
+
+  if (password !== confirm) {
+    setError("Passwords do not match");
+    return;
+  }
+
+  if (password.length < 6) {
+    setError("Password must be at least 6 characters");
+    return;
+  }
+
+  try {
+    setLoading(true);
+    setError("");
+
+    await axios.post(
+      `${API_BASE_URL}/api/auth/register`,
+      {
         name,
         email,
         password,
-      });
-      localStorage.setItem("clientToken",   res.data.token);
-      localStorage.setItem("customerName",  res.data.name);
-      localStorage.setItem("customerEmail", res.data.email);
-      onSuccess(res.data.name, res.data.email);
-    } catch (err) {
-      setError(err.response?.data?.error || "Registration failed");
-    } finally {
-      setLoading(false);
-    }
-  };
+      }
+    );
+
+    alert(
+      "Registration successful!\n\nPlease check your email and verify your account before logging in."
+    );
+
+    setName("");
+    setEmail("");
+    setPassword("");
+    setConfirm("");
+
+    onSwitchToLogin();
+
+  } catch (err) {
+    setError(err.response?.data?.error || "Registration failed");
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div style={{ padding: "24px 22px" }}>

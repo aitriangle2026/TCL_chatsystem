@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import socket from "./socket";
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "https://triangle-lab-chat-production.up.railway.app/").replace(/\/$/, "");
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "");
 
 const normalizeConversation = (conversation) => ({
   ...conversation,
@@ -451,32 +451,6 @@ function App() {
     }
   };
 
-  const handleRegister = async () => {
-    if (!authName.trim() || !authEmail.trim() || !authPassword.trim()) {
-      setAuthError("Please fill in all fields");
-      return;
-    }
-    if (authPassword !== authConfirm) {
-      setAuthError("Passwords do not match");
-      return;
-    }
-    if (authPassword.length < 6) {
-      setAuthError("Password must be at least 6 characters");
-      return;
-    }
-
-    try {
-      const res = await axios.post(`${API_BASE_URL}/api/auth/register`, {
-        name: authName,
-        email: authEmail,
-        password: authPassword,
-        role: "admin",
-      });
-      handleAuthSuccess(res.data.token, res.data.name, res.data.email);
-    } catch (err) {
-      setAuthError(err.response?.data?.error || "Registration failed");
-    }
-  };
 
   const handleForgotPassword = async () => {
     if (!resetEmail.trim()) {
@@ -625,7 +599,9 @@ function App() {
       <div style={{ minHeight: "100vh", background: "#111318", color: "#e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter', sans-serif" }}>
         <div style={{ width: "420px", background: "rgba(10,11,20,0.88)", border: "1px solid rgba(139,92,246,0.2)", borderRadius: "18px", padding: "28px", boxShadow: "0 20px 60px rgba(0,0,0,0.45)" }}>
           <div style={{ fontSize: "20px", fontWeight: "700", marginBottom: "6px" }}>Admin Access</div>
-          <div style={{ fontSize: "13px", color: "#4b5563", marginBottom: "20px" }}>Sign in or create an admin account to manage chats.</div>
+          <div style={{ fontSize: "13px", color: "#4b5563", marginBottom: "20px" }}>
+  Sign in to manage customer conversations.
+</div>
           {authError && <div style={{ padding: "9px 12px", borderRadius: "8px", marginBottom: "12px", background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", color: "#f87171", fontSize: "12px" }}>{authError}</div>}
           {authMessage && <div style={{ padding: "9px 12px", borderRadius: "8px", marginBottom: "12px", background: "rgba(74,222,128,0.08)", border: "1px solid rgba(74,222,128,0.2)", color: "#4ade80", fontSize: "12px" }}>{authMessage}</div>}
           {authView === "login" ? (
@@ -635,17 +611,8 @@ function App() {
               <button onClick={handleLogin} style={{ width: "100%", padding: "12px", background: "linear-gradient(135deg, #8B5CF6 0%, #6366f1 100%)", border: "none", borderRadius: "10px", color: "white", fontSize: "13px", fontWeight: "600", cursor: "pointer", marginBottom: "12px" }}>Sign in</button>
               <div style={{ textAlign: "center", fontSize: "12px", color: "#4b5563" }}>
                 <span onClick={() => { setAuthView("forgot"); setAuthError(""); setAuthMessage(""); }} style={{ color: "#8B5CF6", cursor: "pointer", fontWeight: "600", display: "block", marginBottom: "8px" }}>Forgot password?</span>
-                <span>Need an account? <span onClick={() => setAuthView("register")} style={{ color: "#8B5CF6", cursor: "pointer", fontWeight: "600" }}>Create one</span></span>
+                <span> <span onClick={() => setAuthView("register")} style={{ color: "#8B5CF6", cursor: "pointer", fontWeight: "600" }}></span></span>
               </div>
-            </>
-          ) : authView === "register" ? (
-            <>
-              <input style={{ width: "100%", padding: "10px 12px", marginBottom: "12px", background: "#16181f", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "8px", color: "#e2e8f0" }} placeholder="Admin name" value={authName} onChange={(e) => setAuthName(e.target.value)} />
-              <input style={{ width: "100%", padding: "10px 12px", marginBottom: "12px", background: "#16181f", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "8px", color: "#e2e8f0" }} type="email" placeholder="Admin email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} />
-              <input style={{ width: "100%", padding: "10px 12px", marginBottom: "12px", background: "#16181f", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "8px", color: "#e2e8f0" }} type="password" placeholder="Password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} />
-              <input style={{ width: "100%", padding: "10px 12px", marginBottom: "14px", background: "#16181f", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "8px", color: "#e2e8f0" }} type="password" placeholder="Confirm password" value={authConfirm} onChange={(e) => setAuthConfirm(e.target.value)} />
-              <button onClick={handleRegister} style={{ width: "100%", padding: "12px", background: "linear-gradient(135deg, #8B5CF6 0%, #6366f1 100%)", border: "none", borderRadius: "10px", color: "white", fontSize: "13px", fontWeight: "600", cursor: "pointer", marginBottom: "12px" }}>Create admin account</button>
-              <div style={{ textAlign: "center", fontSize: "12px", color: "#4b5563" }}><span onClick={() => setAuthView("login")} style={{ color: "#8B5CF6", cursor: "pointer", fontWeight: "600" }}>Back to sign in</span></div>
             </>
           ) : authView === "forgot" ? (
             <>

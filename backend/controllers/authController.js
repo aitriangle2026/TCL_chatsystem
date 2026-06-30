@@ -2,7 +2,7 @@ const { getDB } = require("../config/db");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
-const nodemailer = require("nodemailer");
+const { sendEmail } = require("../services/emailService");
 
 const JWT_SECRET = process.env.JWT_SECRET || "tcl_secret_key";
 
@@ -44,64 +44,67 @@ const getFrontendBase = (req, role = "client") => {
   return process.env.FRONTEND_URL || "https://user-chat-site.netlify.app";
 };
 
-const getSmtpConfig = () => {
-  const host = process.env.SMTP_HOST || process.env.MAIL_HOST || process.env.EMAIL_HOST;
-  const user = process.env.SMTP_USER || process.env.MAIL_USERNAME || process.env.MAIL_USER || process.env.EMAIL_USER || process.env.GMAIL_USER;
-  const pass = process.env.SMTP_PASS || process.env.MAIL_PASSWORD || process.env.MAIL_PASS || process.env.EMAIL_PASS || process.env.GMAIL_APP_PASSWORD;
-  const from = process.env.SMTP_FROM || process.env.MAIL_FROM || process.env.EMAIL_FROM || user;
-  const port = Number(process.env.SMTP_PORT || process.env.MAIL_PORT || process.env.EMAIL_PORT || 587);
-  const secureValue = process.env.SMTP_SECURE || process.env.MAIL_SECURE || process.env.EMAIL_SECURE;
-  const secure = secureValue === undefined ? port === 465 : secureValue === "true";
-  const service = process.env.SMTP_SERVICE || process.env.MAIL_SERVICE || process.env.EMAIL_SERVICE || (host && host.toLowerCase().includes("gmail") ? "gmail" : undefined);
+async function sendVerificationEmail(email, verifyLink) {
+  await sendEmail({
+    to: email,
+    subject: "Verify your Triangle Lab account",
+    html: `
+      <div style="font-family:Arial,sans-serif">
+        <h2>Welcome to Triangle Lab</h2>
 
-  return { host, user, pass, from, port, secure, service };
-};
+        <p>Please verify your email address.</p>
 
-const createTransporter = () => {
-  const smtpConfig = getSmtpConfig();
-  if (!smtpConfig.host || !smtpConfig.user || !smtpConfig.pass) {
-    return null;
-  }
+        <a
+  href="${verifyLink}"
+  style="
+    display:inline-block;
+    padding:12px 22px;
+    background:#2563eb;
+    color:#ffffff;
+    text-decoration:none;
+    border-radius:8px;
+    font-weight:bold;
+  "
+>
+  Verify Email
+</a>
 
-  return nodemailer.createTransport({
-    host: smtpConfig.host,
-    port: smtpConfig.port,
-    secure: smtpConfig.secure,
-    auth: {
-      user: smtpConfig.user,
-      pass: smtpConfig.pass,
-    },
-    ...(smtpConfig.service ? { service: smtpConfig.service } : {}),
+        <p>This link expires in 24 hours.</p>
+      </div>
+    `,
   });
-};
+}
 
-const sendResetMail = async (recipient, resetLink) => {
-  const transporter = createTransporter();
-  if (!transporter) {
-    console.warn("SMTP is not configured. Password reset link generated but email was not sent.", resetLink);
-    return false;
-  }
+async function sendResetPasswordEmail(email, resetLink) {
+  await sendEmail({
+    to: email,
+    subject: "Reset your password",
+    html: `
+      <div style="font-family:Arial,sans-serif">
+        <h2>Password Reset</h2>
 
-  try {
-    await transporter.sendMail({
-      from: getSmtpConfig().from || process.env.SMTP_USER || process.env.GMAIL_USER,
-      to: recipient,
-      subject: "Reset your Triangle Lab password",
-      html: `
-        <div style="font-family: Arial, sans-serif; line-height: 1.6;">
-          <h2>Password reset request</h2>
-          <p>Use the link below to reset your password. It will expire in 1 hour.</p>
-          <p><a href="${resetLink}" target="_blank" rel="noreferrer">Reset password</a></p>
-        </div>
-      `,
-    });
+        <p>Click below to reset your password.</p>
 
-    return true;
-  } catch (err) {
-    console.error("Password reset email failed:", err);
-    throw err;
-  }
-};
+        <a
+  href="${resetLink}"
+  style="
+    display:inline-block;
+    padding:12px 22px;
+    background:#2563eb;
+    color:#ffffff;
+    text-decoration:none;
+    border-radius:8px;
+    font-weight:bold;
+  "
+>
+  Reset Password
+</a>
+
+        <p>This link expires in 1 hour.</p>
+      </div>
+    `,
+  });
+}
 
 const register = async (req, res) => {
   const { name, email, password, role } = req.body;
@@ -119,22 +122,49 @@ const register = async (req, res) => {
     if (existing) return res.status(409).json({ error: "Email already registered" });
 
     const hashed = await bcrypt.hash(password, 10);
+    const rawVerificationToken =
+  crypto.randomBytes(32).toString("hex");
+
+const verificationToken =
+  crypto
+    .createHash("sha256")
+    .update(rawVerificationToken)
+    .digest("hex");
+
+const verificationExpires =
+  new Date(Date.now() + 24 * 60 * 60 * 1000);
+
     const result = await users.insertOne({
-      name,
-      email: normalizedEmail,
-      password: hashed,
-      role: normalizedRole,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+  name,
+  email: normalizedEmail,
+  password: hashed,
+  role: normalizedRole,
 
-    const token = jwt.sign(
-      { id: result.insertedId, name, email: normalizedEmail, role: normalizedRole },
-      JWT_SECRET,
-      { expiresIn: "7d" }
-    );
+  isVerified: false,
 
-    res.json({ token, name, email: normalizedEmail, role: normalizedRole });
+  verificationToken,
+
+  verificationExpires,
+
+  createdAt: new Date(),
+  updatedAt: new Date(),
+});
+
+const verifyLink =
+`${process.env.API_URL}/api/auth/verify-email/${rawVerificationToken}`;
+console.log("Sending verification email to:", normalizedEmail);
+console.log("Verify Link:", verifyLink);
+
+await sendVerificationEmail(
+  normalizedEmail,
+  verifyLink
+);
+
+console.log("Verification email sent successfully.");
+
+    res.json({
+  message: "Registration successful. Please verify your email.",
+});
   } catch (err) {
     console.error("Register error:", err);
     res.status(500).json({ error: "Server error" });
@@ -158,6 +188,12 @@ const login = async (req, res) => {
 
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.status(401).json({ error: "Invalid email or password" });
+
+    if (user.role !== "admin" && !user.isVerified) {
+  return res.status(403).json({
+    error: "Please verify your email before logging in.",
+  });
+}
 
     const token = jwt.sign(
       { id: user._id, name: user.name, email: normalizeEmail(user.email), role: user.role || normalizedRole },
@@ -203,13 +239,14 @@ const forgotPassword = async (req, res) => {
 
     const frontendBase = getFrontendBase(req, normalizedRole);
     const resetLink = `${frontendBase}/reset-password?token=${rawToken}&email=${encodeURIComponent(normalizedEmail)}`;
-    const emailSent = await sendResetMail(user.email, resetLink);
+    await sendResetPasswordEmail(
+    user.email,
+    resetLink
+);
 
     res.json({
-      message: emailSent ? "Password reset link sent to your email." : "Password reset link generated, but email delivery is not configured on this server.",
-      resetLink,
-      emailSent,
-    });
+  message: "Password reset link sent to your email.",
+});
   } catch (err) {
     console.error("Forgot password error:", err);
     res.status(500).json({ error: "Server error" });
@@ -256,4 +293,61 @@ const resetPassword = async (req, res) => {
   }
 };
 
-module.exports = { register, login, forgotPassword, resetPassword, createTransporter, getSmtpConfig };
+const verifyEmail = async (req, res) => {
+  const { token } = req.params;
+
+const hashedToken =
+  crypto
+    .createHash("sha256")
+    .update(token)
+    .digest("hex");
+
+  try {
+    const db = getDB();
+    const users = db.collection("users");
+
+    const user = await users.findOne({
+      verificationToken: hashedToken,
+      verificationExpires: { $gt: new Date() },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        error: "Verification link is invalid or expired.",
+      });
+    }
+
+    await users.updateOne(
+      { _id: user._id },
+      {
+        $set: {
+          isVerified: true,
+          updatedAt: new Date(),
+        },
+        $unset: {
+          verificationToken: "",
+          verificationExpires: "",
+        },
+      }
+    );
+
+    return res.redirect(
+  `${process.env.FRONTEND_URL}/?verified=true`
+);
+
+  } catch (err) {
+    console.error(err);
+
+    res.status(500).json({
+      error: "Server error",
+    });
+  }
+};
+
+module.exports = {
+  register,
+  login,
+  forgotPassword,
+  resetPassword,
+  verifyEmail,
+};

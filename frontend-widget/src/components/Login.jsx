@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import axios from "axios";
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "https://triangle-lab-chat-production.up.railway.app/").replace(/\/$/, "");
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "");
 
 const inputStyle = {
   width: "100%",
@@ -33,28 +33,34 @@ export default function Login({ onSuccess, onSwitchToRegister, onSwitchToForgot 
   const [loading,  setLoading]  = useState(false);
 
   const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      setError("Please fill in all fields");
-      return;
-    }
-    try {
-      setLoading(true);
-      setError("");
-      const res = await axios.post(`${API_BASE_URL}/api/auth/login`, {
+  if (!email.trim() || !password.trim()) {
+    setError("Please fill in all fields");
+    return;
+  }
+
+  try {
+    setLoading(true);
+    setError("");
+
+    const res = await axios.post(
+      `${API_BASE_URL}/api/auth/login`,
+      {
         email,
         password,
-      });
-      // Save token + user info
-      localStorage.setItem("clientToken", res.data.token);
-      localStorage.setItem("customerName",  res.data.name);
-      localStorage.setItem("customerEmail", res.data.email);
-      onSuccess(res.data.name, res.data.email);
-    } catch (err) {
-      setError(err.response?.data?.error || "Login failed");
-    } finally {
-      setLoading(false);
-    }
-  };
+      }
+    );
+
+    localStorage.setItem("clientToken", res.data.token);
+    localStorage.setItem("customerName", res.data.name);
+    localStorage.setItem("customerEmail", res.data.email);
+
+    onSuccess(res.data.name, res.data.email);
+  } catch (err) {
+    setError(err.response?.data?.error || "Login failed");
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div style={{ padding: "28px 22px" }}>
