@@ -242,12 +242,10 @@ const forgotPassword = async (req, res) => {
 const resetLink =
   `${frontendBase}/reset-password?token=${rawToken}&email=${encodeURIComponent(normalizedEmail)}`;
 
-// TEMPORARY TEST
-console.log("Reset Link:", resetLink);
+await sendResetPasswordEmail(user.email, resetLink);
 
 return res.json({
-  message: "Password reset link generated successfully.",
-  resetLink,
+  message: "Password reset link sent to your email.",
 });
   } catch (err) {
     console.error("Forgot password error:");
