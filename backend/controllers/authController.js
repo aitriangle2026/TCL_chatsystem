@@ -238,17 +238,21 @@ const forgotPassword = async (req, res) => {
     );
 
     const frontendBase = getFrontendBase(req, normalizedRole);
-    const resetLink = `${frontendBase}/reset-password?token=${rawToken}&email=${encodeURIComponent(normalizedEmail)}`;
-    await sendResetPasswordEmail(
-    user.email,
-    resetLink
-);
 
-    res.json({
-  message: "Password reset link sent to your email.",
+const resetLink =
+  `${frontendBase}/reset-password?token=${rawToken}&email=${encodeURIComponent(normalizedEmail)}`;
+
+// TEMPORARY TEST
+console.log("Reset Link:", resetLink);
+
+return res.json({
+  message: "Password reset link generated successfully.",
+  resetLink,
 });
   } catch (err) {
-    console.error("Forgot password error:", err);
+    console.error("Forgot password error:");
+console.error(err);
+console.error(err.stack);
     res.status(500).json({ error: "Server error" });
   }
 };
