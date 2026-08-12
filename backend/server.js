@@ -24,6 +24,7 @@ if (!fs.existsSync(uploadsDir)) {
 const allowedOrigins = [
   "https://triangleadminchatdashboard.netlify.app",
   "https://trianglechat.netlify.app",
+  "https://chatsystemtcl.netlify.app",
   "http://localhost:5173",
   "http://localhost:5174",
   "http://127.0.0.1:5173",
